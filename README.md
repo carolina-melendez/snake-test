@@ -1,0 +1,22 @@
+# Snake Test
+
+Proyecto sencillo de Snake hecho con Vue 3 y Vite. El juego se renderiza en un `canvas` y permite mover la serpiente con las flechas del teclado para comer animalitos, sumar puntos y evitar chocar con las paredes o con su propio cuerpo.
+
+## Que tiene implementado
+
+- Interfaz hecha con Vue 3.
+- Tablero renderizado con `canvas`.
+- Movimiento de la serpiente con flechas del teclado.
+- Sistema de puntaje.
+- Deteccion de colisiones con bordes y cuerpo.
+- Comida aleatoria con emojis de animalitos.
+- Reinicio de partida desde un boton.
+- Estados visuales de espera, jugando y game over.
+- Sonidos simples al comer y al perder.
+- Diseno responsive para escritorio y movil.
+
+## Scripts
+
+- `npm run dev`: inicia el proyecto en desarrollo.
+- `npm run build`: genera la version de produccion.
+- `npm run preview`: abre la vista previa del build.
