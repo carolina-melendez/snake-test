@@ -70,6 +70,7 @@ const nextDirection = ref({ x: 1, y: 0 })
 const food = ref(null)
 const loopId = ref(null)
 const hasStarted = ref(false)
+let audioContext = null
 
 const canvasSize = CANVAS_SIZE
 const tickRate = TICK_RATE
@@ -114,6 +115,8 @@ function initGame() {
 
 function startGame() {
   clearGameLoop()
+  ensureAudioContext()
+
   if (!food.value) {
     food.value = spawnFood()
   }
@@ -152,6 +155,7 @@ function updateGame() {
 
   if (checkCollision(newHead)) {
     gameState.value = 'lost'
+    playLoseSound()
     clearGameLoop()
     drawGame()
     return
@@ -161,6 +165,7 @@ function updateGame() {
 
   if (food.value && newHead.x === food.value.x && newHead.y === food.value.y) {
     score.value += 1
+    playEatSound()
     food.value = spawnFood()
   } else {
     snake.value.pop()
@@ -328,6 +333,59 @@ function clearGameLoop() {
   }
 }
 
+function ensureAudioContext() {
+  if (!audioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    if (AudioContextClass) {
+      audioContext = new AudioContextClass()
+    }
+  }
+
+  if (audioContext?.state === 'suspended') {
+    audioContext.resume().catch(() => {})
+  }
+}
+
+function playTone({ frequency, duration, type, volume, rampTo = 0.0001 }) {
+  if (!audioContext) {
+    return
+  }
+
+  const oscillator = audioContext.createOscillator()
+  const gainNode = audioContext.createGain()
+  const now = audioContext.currentTime
+
+  oscillator.type = type
+  oscillator.frequency.setValueAtTime(frequency, now)
+
+  gainNode.gain.setValueAtTime(volume, now)
+  gainNode.gain.exponentialRampToValueAtTime(rampTo, now + duration)
+
+  oscillator.connect(gainNode)
+  gainNode.connect(audioContext.destination)
+
+  oscillator.start(now)
+  oscillator.stop(now + duration)
+}
+
+function playEatSound() {
+  ensureAudioContext()
+  playTone({ frequency: 660, duration: 0.08, type: 'square', volume: 0.05 })
+
+  window.setTimeout(() => {
+    playTone({ frequency: 880, duration: 0.07, type: 'square', volume: 0.04 })
+  }, 45)
+}
+
+function playLoseSound() {
+  ensureAudioContext()
+  playTone({ frequency: 260, duration: 0.18, type: 'sawtooth', volume: 0.06 })
+
+  window.setTimeout(() => {
+    playTone({ frequency: 140, duration: 0.28, type: 'triangle', volume: 0.05 })
+  }, 110)
+}
+
 function roundRect(ctx, x, y, width, height, radius) {
   ctx.beginPath()
   ctx.moveTo(x + radius, y)
@@ -350,6 +408,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearGameLoop()
   window.removeEventListener('keydown', handleKeydown)
+  if (audioContext) {
+    audioContext.close().catch(() => {})
+    audioContext = null
+  }
 })
 </script>
 
