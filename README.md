@@ -8,6 +8,9 @@ Proyecto sencillo de Snake hecho con Vue 3 y Vite. El juego se renderiza en un `
 - Tablero renderizado con `canvas`.
 - Movimiento de la serpiente con flechas del teclado.
 - Sistema de puntaje.
+- Guardado local del mejor puntaje.
+- Aumento progresivo de velocidad cada 5 puntos.
+- Opcion para pausar y reanudar la partida.
 - Deteccion de colisiones con bordes y cuerpo.
 - Comida aleatoria con emojis de animalitos.
 - Reinicio de partida desde un boton.

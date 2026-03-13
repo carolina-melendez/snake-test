@@ -1,7 +1,6 @@
 <template>
   <section class="game-layout">
     <aside class="game-panel">
-      <p class="eyebrow">Vue 3 + Canvas</p>
       <h1>Snake de Animalitos</h1>
       <p class="description">
         Come todos los animalitos que puedas. Si tocas los bordes o tu propio cuerpo, pierdes.
@@ -13,6 +12,10 @@
           <strong>{{ score }}</strong>
         </div>
         <div class="stat-row">
+          <span>Mejor puntaje</span>
+          <strong class="best-score">{{ highScore }}</strong>
+        </div>
+        <div class="stat-row">
           <span>Estado</span>
           <strong :class="statusClass">{{ statusLabel }}</strong>
         </div>
@@ -22,12 +25,9 @@
         </div>
       </div>
 
-      <button class="game-button" type="button" @click="toggleGame">
-        {{ buttonLabel }}
-      </button>
-
       <div class="message-box" :class="overlayClass">
         <p v-if="gameState === 'lost'">Game Over. Intenta otra vez.</p>
+        <p v-else-if="gameState === 'paused'">Juego en pausa. Presiona reanudar para continuar.</p>
         <p v-else-if="gameState === 'running'">Usa las flechas del teclado para moverte.</p>
         <p v-else>Presiona el botón para comenzar la partida.</p>
       </div>
@@ -35,6 +35,19 @@
     </aside>
 
     <div class="canvas-shell">
+      <div class="canvas-actions">
+        <button class="game-button" type="button" @click="toggleGame">
+          {{ buttonLabel }}
+        </button>
+        <button
+          class="game-button secondary"
+          type="button"
+          :disabled="!hasStarted || gameState === 'lost'"
+          @click="togglePause"
+        >
+          {{ pauseButtonLabel }}
+        </button>
+      </div>
       <canvas
         ref="canvasRef"
         :width="canvasSize"
@@ -51,7 +64,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 const GRID_SIZE = 18
 const CELL_SIZE = 28
 const CANVAS_SIZE = GRID_SIZE * CELL_SIZE
-const TICK_RATE = 140
+const BASE_TICK_RATE = 190
+const SPEED_STEP = 15
+const POINTS_PER_LEVEL = 5
+const MIN_TICK_RATE = 85
+const HIGH_SCORE_STORAGE_KEY = 'snake-best-score'
 const ANIMALS = ['🐭', '🐸', '🐤', '🐟', '🐇']
 
 const DIRECTIONS = {
@@ -63,6 +80,7 @@ const DIRECTIONS = {
 
 const canvasRef = ref(null)
 const score = ref(0)
+const highScore = ref(0)
 const gameState = ref('idle')
 const snake = ref([])
 const direction = ref({ x: 1, y: 0 })
@@ -73,10 +91,14 @@ const hasStarted = ref(false)
 let audioContext = null
 
 const canvasSize = CANVAS_SIZE
-const tickRate = TICK_RATE
+const tickRate = computed(() => {
+  const earnedLevels = Math.floor(score.value / POINTS_PER_LEVEL)
+  return Math.max(BASE_TICK_RATE - earnedLevels * SPEED_STEP, MIN_TICK_RATE)
+})
 
 const statusLabel = computed(() => {
   if (gameState.value === 'running') return 'Jugando'
+  if (gameState.value === 'paused') return 'Pausado'
   if (gameState.value === 'lost') return 'Game Over'
   return 'En espera'
 })
@@ -84,6 +106,7 @@ const statusLabel = computed(() => {
 const statusClass = computed(() => {
   return {
     running: gameState.value === 'running',
+    paused: gameState.value === 'paused',
     lost: gameState.value === 'lost',
     idle: gameState.value === 'idle'
   }
@@ -93,9 +116,14 @@ const buttonLabel = computed(() => {
   return hasStarted.value ? 'Reiniciar juego' : 'Iniciar juego'
 })
 
+const pauseButtonLabel = computed(() => {
+  return gameState.value === 'paused' ? 'Reanudar juego' : 'Pausar juego'
+})
+
 const overlayClass = computed(() => ({
   danger: gameState.value === 'lost',
-  active: gameState.value === 'running'
+  active: gameState.value === 'running',
+  paused: gameState.value === 'paused'
 }))
 
 function initGame() {
@@ -123,7 +151,7 @@ function startGame() {
 
   hasStarted.value = true
   gameState.value = 'running'
-  loopId.value = window.setInterval(updateGame, TICK_RATE)
+  loopId.value = window.setInterval(updateGame, tickRate.value)
 }
 
 function resetGame() {
@@ -139,6 +167,19 @@ function toggleGame() {
   }
 
   resetGame()
+}
+
+function togglePause() {
+  if (!hasStarted.value || gameState.value === 'lost') {
+    return
+  }
+
+  if (gameState.value === 'paused') {
+    resumeGame()
+    return
+  }
+
+  pauseGame()
 }
 
 function updateGame() {
@@ -164,9 +205,12 @@ function updateGame() {
   snake.value.unshift(newHead)
 
   if (food.value && newHead.x === food.value.x && newHead.y === food.value.y) {
+    const previousTickRate = tickRate.value
     score.value += 1
+    updateHighScore(score.value)
     playEatSound()
     food.value = spawnFood()
+    syncGameSpeed(previousTickRate)
   } else {
     snake.value.pop()
   }
@@ -333,6 +377,49 @@ function clearGameLoop() {
   }
 }
 
+function pauseGame() {
+  if (gameState.value !== 'running') {
+    return
+  }
+
+  gameState.value = 'paused'
+  clearGameLoop()
+}
+
+function resumeGame() {
+  if (gameState.value !== 'paused') {
+    return
+  }
+
+  gameState.value = 'running'
+  clearGameLoop()
+  loopId.value = window.setInterval(updateGame, tickRate.value)
+}
+
+function loadHighScore() {
+  const storedValue = window.localStorage.getItem(HIGH_SCORE_STORAGE_KEY)
+  const parsedValue = Number.parseInt(storedValue ?? '0', 10)
+  highScore.value = Number.isNaN(parsedValue) ? 0 : parsedValue
+}
+
+function updateHighScore(nextScore) {
+  if (nextScore <= highScore.value) {
+    return
+  }
+
+  highScore.value = nextScore
+  window.localStorage.setItem(HIGH_SCORE_STORAGE_KEY, String(nextScore))
+}
+
+function syncGameSpeed(previousTickRate) {
+  if (gameState.value !== 'running' || tickRate.value === previousTickRate) {
+    return
+  }
+
+  clearGameLoop()
+  loopId.value = window.setInterval(updateGame, tickRate.value)
+}
+
 function ensureAudioContext() {
   if (!audioContext) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -401,6 +488,7 @@ function roundRect(ctx, x, y, width, height, radius) {
 }
 
 onMounted(() => {
+  loadHighScore()
   initGame()
   window.addEventListener('keydown', handleKeydown)
 })
@@ -420,13 +508,14 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 2rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .game-panel {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  height: 100%;
   padding: 2rem;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 24px;
@@ -480,8 +569,16 @@ h1 {
   color: #f8fafc;
 }
 
+.stat-row strong.best-score {
+  color: #facc15;
+}
+
 .stat-row strong.running {
   color: #7dff9b;
+}
+
+.stat-row strong.paused {
+  color: #fbbf24;
 }
 
 .stat-row strong.won {
@@ -513,12 +610,28 @@ h1 {
   filter: brightness(1.06);
 }
 
+.game-button.secondary {
+  background: linear-gradient(135deg, #f59e0b, #b45309);
+}
+
+.game-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  filter: none;
+}
+
 .message-box {
   color: #dbeafe;
 }
 
 .message-box.active {
   border-color: rgba(34, 197, 94, 0.35);
+}
+
+.message-box.paused {
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fde68a;
 }
 
 .message-box.success {
@@ -543,8 +656,11 @@ h1 {
 }
 
 .canvas-shell {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+  height: 100%;
   padding: 1.4rem;
   border-radius: 28px;
   background:
@@ -552,6 +668,13 @@ h1 {
     linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(3, 9, 18, 0.98));
   border: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.canvas-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
 }
 
 .game-canvas {
@@ -573,6 +696,22 @@ h1 {
 
   .canvas-shell {
     order: 1;
+  }
+
+  .canvas-actions {
+    grid-template-columns: 1fr;
+    order: 2;
+    width: 100%;
+  }
+
+  .game-canvas {
+    order: 1;
+  }
+
+  .game-button {
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
+    border-radius: 14px;
   }
 }
 </style>
