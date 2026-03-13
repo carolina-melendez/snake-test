@@ -23,3 +23,14 @@ Proyecto sencillo de Snake hecho con Vue 3 y Vite. El juego se renderiza en un `
 - `npm run dev`: inicia el proyecto en desarrollo.
 - `npm run build`: genera la version de produccion.
 - `npm run preview`: abre la vista previa del build.
+
+## Despliegue en GitHub Pages
+
+El proyecto esta configurado para publicarse en GitHub Pages desde la rama `main` usando GitHub Actions.
+
+Pasos:
+
+- En GitHub, abre `Settings > Pages`.
+- En `Source`, selecciona `GitHub Actions`.
+- Haz push a la rama `main`.
+- GitHub ejecutara el workflow y publicara la carpeta `dist`.
